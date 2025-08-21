@@ -115,15 +115,14 @@ def page_case_detail():
 
     # Case Info
     st.markdown(f"### 🩺 Case {case['id']}")
+    st.markdown(f"**Title:** {(case['title'])}")
     st.markdown(f"**Description:** {(case['description'])}")
     st.markdown(f"**Symptoms:** {', '.join(case['symptoms'])}")
 
     # Tabs
     tab1, tab2 = st.tabs(["💬 Interview Patient",  "📝 Solve Case"])
-#----------------------------
-# Interview Patient (GPT-5)
-# -------------------------
-        # -------------------------
+
+    # -------------------------
     # Interview Patient (GPT-5)
     # -------------------------
     with tab1:
@@ -160,47 +159,43 @@ def page_case_detail():
 
 
 
-   # -------------------------
-# Solve Case (Evaluator)
-# -------------------------
-with tab2:
-    st.subheader("Solve the Case")
-    with st.form("solve_form"):
-        student_diag = st.text_input("Provisional Diagnosis")
-        
-        # Instead of pre-populated tests, let student write their own
-        student_tests_input = st.text_area(
-            "Recommended Tests (separate multiple tests with commas)",
-            placeholder="e.g. CBC, Chest X-ray, ECG"
-        )
-        
-        # Convert comma-separated input into list
-        student_tests = [t.strip() for t in student_tests_input.split(",") if t.strip()]
+    # -------------------------
+    # Solve Case (Evaluator)
+    # -------------------------
+    with tab2:
+        st.subheader("Solve the Case")
+        with st.form("solve_form"):
+            student_diag = st.text_input("Provisional Diagnosis")
 
-        student_plan = st.text_area("Initial Management Plan")
-        submit = st.form_submit_button("Submit for Feedback")
-    
-    if submit:
-        student_answer = {
-            "diagnosis": student_diag,
-            "tests": student_tests,
-            "plan": student_plan
-        }
-        ss.student_answers[case["id"]] = student_answer
+            # Ab student khud tests likhega (comma separated)
+            tests_input = st.text_area("Key Tests (separate multiple tests with commas)")
+            student_tests = [t.strip() for t in tests_input.split(",") if t.strip()]
 
-        # AI evaluator feedback
-        messages = evaluator_agent(case, student_answer)
-        response = client.chat.completions.create(
-            model="openai/gpt-5-chat-latest",
-            messages=messages,
-            response_format={"type": "json_object"},
-            temperature=0.7
-        )
-        fb = json.loads(response.choices[0].message.content)
-        ss.latest_feedback = fb
-        ss.scores.append(fb)
-        ss.page = "FEEDBACK"
-        st.rerun()
+            student_plan = st.text_area("Initial Management Plan")
+            submit = st.form_submit_button("Submit for Feedback")
+        
+        if submit:
+            student_answer = {
+                "diagnosis": student_diag,
+                "tests": student_tests,
+                "plan": student_plan
+            }
+            ss.student_answers[case["id"]] = student_answer
+
+            # AI evaluator feedback
+            messages = evaluator_agent(case, student_answer)
+            response = client.chat.completions.create(
+                model="openai/gpt-5-chat-latest",
+                messages=messages,
+                response_format={"type": "json_object"},
+                temperature=0.7
+            )
+            fb = json.loads(response.choices[0].message.content)
+            ss.latest_feedback = fb
+            ss.scores.append(fb)
+            ss.page = "FEEDBACK"
+            st.rerun()
+
 
 def page_feedback():
     fb = ss.latest_feedback
