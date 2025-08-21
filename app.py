@@ -166,7 +166,6 @@ def page_case_detail():
         st.subheader("Solve the Case")
         with st.form("solve_form"):
             student_diag = st.text_input("Provisional Diagnosis")
-<<<<<<< HEAD
 
             # Ab student khud tests likhega (comma separated)
             tests_input = st.text_area("Key Tests (separate multiple tests with commas)")
@@ -183,20 +182,6 @@ def page_case_detail():
             }
             ss.student_answers[case["id"]] = student_answer
 
-=======
-            student_tests = st.multiselect("Key Tests", options=case.get("recommended_tests", []))
-            student_plan = st.text_area("Initial Management Plan")
-            submit = st.form_submit_button("Submit for Feedback")
-        
-        if submit:
-            student_answer = {
-                "diagnosis": student_diag,
-                "tests": student_tests,
-                "plan": student_plan
-            }
-            ss.student_answers[case["id"]] = student_answer
-
->>>>>>> 6ec065c8f7069afd919ab6d6c570de14a4ca3e84
             # AI evaluator feedback
             messages = evaluator_agent(case, student_answer)
             response = client.chat.completions.create(
@@ -210,10 +195,6 @@ def page_case_detail():
             ss.scores.append(fb)
             ss.page = "FEEDBACK"
             st.rerun()
-<<<<<<< HEAD
-
-=======
->>>>>>> 6ec065c8f7069afd919ab6d6c570de14a4ca3e84
 
 def page_feedback():
     fb = ss.latest_feedback
