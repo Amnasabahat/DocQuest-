@@ -115,7 +115,6 @@ def page_case_detail():
 
     # Case Info
     st.markdown(f"### 🩺 Case {case['id']}")
-    st.markdown(f"**Title:** {(case['title'])}")
     st.markdown(f"**Description:** {(case['description'])}")
     st.markdown(f"**Symptoms:** {', '.join(case['symptoms'])}")
 
