@@ -146,32 +146,28 @@ def page_home():
               on_click=lambda: set_page("CATEGORY_SELECT"))
 
     # 🌟 Today’s Challenge (Card style)
+        # 🌟 Today’s Challenge (Card style)
+    # 🌟 Today’s Challenge (Dark-theme friendly card style)
     try:
         rc = random.choice(cases)
         st.markdown(f"""
             <div style="
                 border-radius: 12px;
-                padding: 15px;
-                background: #1e1e1e;  /* Dark card to match Streamlit dark theme */
-                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                padding: 12px;
+                background-color: rgba(255,255,255,0.05);
+                border: 1px solid rgba(255,255,255,0.1);
                 margin-top:15px;
-                margin-bottom:15px;
-                color: #f1f1f1;
-                font-family: 'Segoe UI', sans-serif;">
-                
+                margin-bottom:15px;">
                 <h3 style="color:#ff9800; margin-bottom:8px;">🔥 Today’s Challenge</h3>
-                <p style="margin:0;"><b>Case:</b> {rc['id']}</p>
-                <p style="color:#ccc; font-size:13px; margin-top:5px;">
-                    {snippet(rc.get('description',''), 90)}
-                </p>
+                <p><b>Case:</b> {rc['id']}</p>
+                <p style="color:#ccc; font-size:14px;">{snippet(rc.get('description',''), 100)}</p>
             </div>
         """, unsafe_allow_html=True)
 
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            if st.button("🚀 Take Challenge", use_container_width=True):
-                ss.current_case = rc
-                set_page("CASE_DETAIL")
+        if st.button("🚀 Take Challenge", use_container_width=True):
+            ss.current_case = rc
+            set_page("CASE_DETAIL")
+
 
     except Exception:
         st.info("A featured case will appear here when cases.json is loaded.")
