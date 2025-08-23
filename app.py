@@ -49,7 +49,6 @@ ss.setdefault("chat_log", [])
 # === CHANGE 1: helper for navigation ===
 def set_page(name: str):
     ss.page = name
-    st.rerun()
 
 # -------------------------
 # Helper Functions
@@ -234,7 +233,7 @@ def page_case_detail():
             )
             reply = response.choices[0].message.content
             ss.chat_log.append(("Patient", reply))
-            st.rerun()
+
 
     # -------------------------
     # Solve Case (Evaluator)
