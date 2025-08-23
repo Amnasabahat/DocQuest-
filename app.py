@@ -139,6 +139,7 @@ else:
 # 📜 Global History (merged)
 st.sidebar.markdown("### 📜 Recent Case History")
 history_to_show = (ss.attempt_history or []) + global_history
+
 # remove duplicates
 seen, merged = set(), []
 for item in history_to_show:
@@ -154,44 +155,26 @@ if merged:
         score = att.get('score', '—')
         date = att.get('date', '—')
 
-        # ek unique key for JS action
-        btn_key = f"reattempt_{i}"
-
-        # Custom HTML block with button aligned right
-        st.sidebar.markdown(
-            f"""
-            <div style="display:flex; justify-content:space-between; 
-                        align-items:center; margin:5px 0; 
-                        padding:6px 10px; border-radius:8px; 
-                        background-color: rgba(255,255,255,0.05);
-                        border: 1px solid rgba(255,255,255,0.1);
-                        font-size:14px; color:#eee;">
-                
-                <div>
-                    <b>Case {case_id}</b> | {score}/10
-                    <div style="font-size:12px; opacity:.8;">{date}</div>
+        # Left info + Right button
+        c1, c2 = st.sidebar.columns([4, 1])
+        with c1:
+            st.markdown(
+                f"""
+                <div style="padding:6px 0;">
+                    <b>Case {case_id}</b> | {score}/10  
+                    <div style="font-size:12px; opacity:.7;">{date}</div>
                 </div>
-
-                <form action="" method="post">
-                    <button name="action" value="{btn_key}" 
-                            style="background:none; border:none; 
-                                   cursor:pointer; font-size:16px; 
-                                   color:#ff9800;">🔄</button>
-                </form>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        # backend handle (button press simulation)
-        if st.session_state.get("action") == btn_key:
-            case = next((c for c in cases if c["id"] == case_id), None)
-            if case:
-                ss.current_case = case
-                set_page("CASE_DETAIL")
-
+                """, unsafe_allow_html=True
+            )
+        with c2:
+            if st.button("🔄", key=f"reattempt_{i}"):
+                case = next((c for c in cases if c["id"] == case_id), None)
+                if case:
+                    ss.current_case = case
+                    set_page("CASE_DETAIL")
 else:
     st.sidebar.info("No history yet.")
+
 
 # -------------------------
 # ROUTES
