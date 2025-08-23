@@ -83,9 +83,9 @@ def snippet(text: str, n: int = 90) -> str:
 st.sidebar.title("DocQuest 🩺")
 st.sidebar.markdown("**Disclaimer:** Educational simulation only — not medical advice.")
 
-st.sidebar.markdown(f"#### 👤 Profile: Guest")
+st.sidebar.markdown("#### 👤 Profile: Guest")
 
-# 📊 Progress + Case History (Merged)
+# 📊 Progress + Case History
 st.sidebar.markdown("### 📈 Progress & History")
 
 if ss.scores:
@@ -104,32 +104,32 @@ else:
     st.sidebar.write("Badge: —")
 
 # 📜 Case History
-for i, att in enumerate(reversed(ss.attempt_history[-5:]), 1):
-    case_id = att['case_id']
-    score = att['score']
-    date = att['date']
+if ss.attempt_history:
+    for i, att in enumerate(reversed(ss.attempt_history[-5:]), 1):
+        case_id = att['case_id']
+        score = att['score']
+        date = att['date']
 
-    st.sidebar.markdown(
-        f"""
-        <div title="Attempted on {date}" 
-             style="display:flex; justify-content:space-between; 
-                    align-items:center; margin:5px 0; 
-                    padding:5px 10px; border-radius:8px; 
-                    background:#f7f7f7; font-size:14px;">
-            <span><b>Case {case_id}</b> | {score}/10</span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+        st.sidebar.markdown(
+            f"""
+            <div title="Attempted on {date}" 
+                 style="display:flex; justify-content:space-between; 
+                        align-items:center; margin:5px 0; 
+                        padding:5px 10px; border-radius:8px; 
+                        background:#f7f7f7; font-size:14px;">
+                <span><b>Case {case_id}</b> | {score}/10</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-    if st.sidebar.button("🔄", key=f"reattempt_{i}"):
-        case = next((c for c in cases if c["id"] == att["case_id"]), None)
-        if case:
-            ss.current_case = case
-            set_page("CASE_DETAIL")
-
-        else:
-            st.sidebar.info("No history yet.")
+        if st.sidebar.button("🔄 Reattempt", key=f"reattempt_{i}"):
+            case = next((c for c in cases if c["id"] == att["case_id"]), None)
+            if case:
+                ss.current_case = case
+                set_page("CASE_DETAIL")
+else:
+    st.sidebar.info("No history yet.")
 
 # -------------------------
 # ROUTES
@@ -148,7 +148,7 @@ def page_home():
     # 🌟 Today’s Challenge (Card style)
     try:
         rc = random.choice(cases)
-        st.markdown("""
+        st.markdown(f"""
             <div style="
                 border-radius: 15px;
                 padding: 10px;
@@ -157,10 +157,10 @@ def page_home():
                 margin-top:20px;
                 margin-bottom:20px;">
                 <h3 style="color:#ff5733; margin-bottom:10px;">🔥 Today’s Challenge</h3>
-                <p><b>Case:</b> {}</p>
-                <p style="color:#444; font-size:14px;">{}</p>
+                <p><b>Case:</b> {rc['id']}</p>
+                <p style="color:#444; font-size:14px;">{snippet(rc.get('description',''), 100)}</p>
             </div>
-        """.format(rc['id'], snippet(rc.get('description',''), 100)), unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
         if st.button("🚀 Take Challenge", use_container_width=True):
             ss.current_case = rc
@@ -168,7 +168,6 @@ def page_home():
 
     except Exception:
         st.info("A featured case will appear here when cases.json is loaded.")
-
 
 def page_category_select():
     st.title("📂 Select Case Category")
@@ -262,7 +261,7 @@ def page_case_detail():
             ss.latest_feedback = fb
             ss.scores.append(fb)
 
-            # ✅ NEW: Save attempt history
+            # ✅ Save attempt history
             ss.attempt_history.append({
                 "case_id": case["id"],
                 "score": fb["diagnosis_score"] + fb["tests_score"] + fb["plan_score"],
@@ -300,7 +299,7 @@ def page_feedback():
     if fb.get("red_flags"):
         st.error("⚠️ Red flags detected! Review carefully.")
 
-    # ✅ Export feedback option
+    # Export option
     export_feedback(fb)
 
     c1, c2 = st.columns(2)
