@@ -83,8 +83,6 @@ def snippet(text: str, n: int = 90) -> str:
 st.sidebar.title("DocQuest 🩺")
 st.sidebar.markdown("**Disclaimer:** Educational simulation only — not medical advice.")
 
-st.sidebar.markdown("#### 👤 Profile: Guest")
-
 # 📊 Progress + Case History
 st.sidebar.markdown("### 📈 Progress & History")
 
