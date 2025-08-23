@@ -154,27 +154,42 @@ if merged:
         score = att.get('score', '—')
         date = att.get('date', '—')
 
+        # ek unique key for JS action
+        btn_key = f"reattempt_{i}"
+
+        # Custom HTML block with button aligned right
         st.sidebar.markdown(
             f"""
-            <div title="Attempted on {date}" 
-                style="display:flex; justify-content:space-between; 
+            <div style="display:flex; justify-content:space-between; 
                         align-items:center; margin:5px 0; 
                         padding:6px 10px; border-radius:8px; 
                         background-color: rgba(255,255,255,0.05);
                         border: 1px solid rgba(255,255,255,0.1);
                         font-size:14px; color:#eee;">
-                <span><b>Case {case_id}</b> | {score}/10</span>
-                <span style="opacity:.8; font-size:12px;">{date}</span>
+                
+                <div>
+                    <b>Case {case_id}</b> | {score}/10
+                    <div style="font-size:12px; opacity:.8;">{date}</div>
+                </div>
+
+                <form action="" method="post">
+                    <button name="action" value="{btn_key}" 
+                            style="background:none; border:none; 
+                                   cursor:pointer; font-size:16px; 
+                                   color:#ff9800;">🔄</button>
+                </form>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-        if st.sidebar.button("🔄", key=f"{i}"):
+        # backend handle (button press simulation)
+        if st.session_state.get("action") == btn_key:
             case = next((c for c in cases if c["id"] == case_id), None)
             if case:
                 ss.current_case = case
                 set_page("CASE_DETAIL")
+
 else:
     st.sidebar.info("No history yet.")
 
