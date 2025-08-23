@@ -6,6 +6,9 @@ import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
 from agents import patient_agent, evaluator_agent   # AI patient + evaluator
+import threading
+
+HISTORY_FILE = "global_history.jsonl"
 
 # -------------------------
 # Load environment variables
@@ -24,6 +27,39 @@ client = OpenAI(
 )
 
 # -------------------------
+# Helper: History Persistence
+# -------------------------
+@st.cache_resource
+def _history_lock():
+    return threading.Lock()
+
+def load_global_history() -> list:
+    """Read all attempts from a shared JSONL file (one JSON per line)."""
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    items = []
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    items.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except Exception:
+        pass
+    return items  # newest last
+
+def append_global_history(entry: dict):
+    """Append a single attempt to the global history file (thread-safe)."""
+    lock = _history_lock()
+    with lock:
+        with open(HISTORY_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+# -------------------------
 # Load cases
 # -------------------------
 @st.cache_data
@@ -33,6 +69,7 @@ def load_cases():
     return data["cases"]
 
 cases = load_cases()
+global_history = load_global_history()
 
 # -------------------------
 # Session State Init
@@ -46,7 +83,7 @@ ss.setdefault("student_answers", {})
 ss.setdefault("latest_feedback", None)
 ss.setdefault("scores", [])
 ss.setdefault("chat_log", [])
-ss.setdefault("attempt_history", [])   # ✅ NEW: store case history
+ss.setdefault("attempt_history", [])   # per-user, but global added separately
 
 # -------------------------
 # Navigation Helper
@@ -76,16 +113,14 @@ def score_to_badge(avg: float) -> str:
 def snippet(text: str, n: int = 90) -> str:
     return (text[:n] + "…") if len(text) > n else text
 
-
 # -------------------------
 # Sidebar
 # -------------------------
 st.sidebar.title("DocQuest 🩺")
 st.sidebar.markdown("**Disclaimer:** Educational simulation only — not medical advice.")
 
-# 📊 Progress + Case History
-st.sidebar.markdown("### 📈 Progress & History")
-
+# 📊 Progress
+st.sidebar.markdown("### 📈 Your Progress")
 if ss.scores:
     total = len(ss.scores)
     avg_score = sum(
@@ -101,31 +136,42 @@ else:
     st.sidebar.write("Average Score: —")
     st.sidebar.write("Badge: —")
 
-# 📜 Case History
-if ss.attempt_history:
-    for i, att in enumerate(reversed(ss.attempt_history[-5:]), 1):
-        case_id = att['case_id']
-        score = att['score']
-        date = att['date']
+# 📜 Global History (merged)
+st.sidebar.markdown("### 📜 Recent Case History")
+history_to_show = (ss.attempt_history or []) + global_history
+# remove duplicates
+seen, merged = set(), []
+for item in history_to_show:
+    key = (item.get("case_id"), item.get("date"), item.get("score"))
+    if key in seen:
+        continue
+    seen.add(key)
+    merged.append(item)
+
+if merged:
+    for i, att in enumerate(reversed(merged[-8:]), 1):
+        case_id = att.get('case_id', '—')
+        score = att.get('score', '—')
+        date = att.get('date', '—')
 
         st.sidebar.markdown(
-        f"""
-        <div title="Attempted on {date}" 
-            style="display:flex; justify-content:space-between; 
-                    align-items:center; margin:5px 0; 
-                    padding:6px 10px; border-radius:8px; 
-                    background-color: rgba(255,255,255,0.05);
-                    border: 1px solid rgba(255,255,255,0.1);
-                    font-size:14px; color:#eee;">
-            <span><b>Case {case_id}</b> | {score}/10</span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+            f"""
+            <div title="Attempted on {date}" 
+                style="display:flex; justify-content:space-between; 
+                        align-items:center; margin:5px 0; 
+                        padding:6px 10px; border-radius:8px; 
+                        background-color: rgba(255,255,255,0.05);
+                        border: 1px solid rgba(255,255,255,0.1);
+                        font-size:14px; color:#eee;">
+                <span><b>Case {case_id}</b> | {score}/10</span>
+                <span style="opacity:.8; font-size:12px;">{date}</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-
-        if st.sidebar.button("🔄 Reattempt", key=f"reattempt_{i}"):
-            case = next((c for c in cases if c["id"] == att["case_id"]), None)
+        if st.sidebar.button("🔄", key=f"reattempt_{i}"):
+            case = next((c for c in cases if c["id"] == case_id), None)
             if case:
                 ss.current_case = case
                 set_page("CASE_DETAIL")
@@ -142,23 +188,17 @@ def page_home():
         "DocQuest is your safe space to simulate patient encounters and sharpen clinical reasoning."
     )
 
-    # ✅ Start Simulation button
     st.button("▶️ Start Simulation", use_container_width=True,
               on_click=lambda: set_page("CATEGORY_SELECT"))
 
-    # 🌟 Today’s Challenge (Card style)
-        # 🌟 Today’s Challenge (Card style)
-    # 🌟 Today’s Challenge (Dark-theme friendly card style)
     try:
         rc = random.choice(cases)
         st.markdown(f"""
-            <div style="
-                border-radius: 12px;
-                padding: 12px;
-                background-color: rgba(255,255,255,0.05);
-                border: 1px solid rgba(255,255,255,0.1);
-                margin-top:15px;
-                margin-bottom:15px;">
+            <div style="border-radius: 12px;
+                        padding: 12px;
+                        background-color: rgba(255,255,255,0.05);
+                        border: 1px solid rgba(255,255,255,0.1);
+                        margin-top:15px; margin-bottom:15px;">
                 <h3 style="color:#ff9800; margin-bottom:8px;">🔥 Today’s Challenge</h3>
                 <p><b>Case:</b> {rc['id']}</p>
                 <p style="color:#ccc; font-size:14px;">{snippet(rc.get('description',''), 100)}</p>
@@ -168,8 +208,6 @@ def page_home():
         if st.button("🚀 Take Challenge", use_container_width=True):
             ss.current_case = rc
             set_page("CASE_DETAIL")
-
-
     except Exception:
         st.info("A featured case will appear here when cases.json is loaded.")
 
@@ -208,9 +246,8 @@ def page_case_detail():
     st.button("⬅️ Back to Categories", on_click=lambda: (_back_to_cat()))
     st.markdown(f"### 🩺 Case {case['id']}")
 
-    with st.container():
-        st.markdown("#### 🧾 Description")
-        st.write(case.get("description", "—"))
+    st.markdown("#### 🧾 Description")
+    st.write(case.get("description", "—"))
 
     with st.expander("🩺 Symptoms / History", expanded=True):
         st.write(", ".join(case.get("symptoms", [])) or "—")
@@ -265,12 +302,14 @@ def page_case_detail():
             ss.latest_feedback = fb
             ss.scores.append(fb)
 
-            # ✅ Save attempt history
-            ss.attempt_history.append({
+            # ✅ Save attempt history (local + global)
+            entry = {
                 "case_id": case["id"],
                 "score": fb["diagnosis_score"] + fb["tests_score"] + fb["plan_score"],
                 "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-            })
+            }
+            ss.attempt_history.append(entry)
+            append_global_history(entry)
 
             set_page("FEEDBACK")
 
