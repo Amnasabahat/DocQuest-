@@ -1,9 +1,11 @@
 import streamlit as st
 import json
 import os
+import random
+import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
-from agents import patient_agent, evaluator_agent   # <-- AI patient + evaluator
+from agents import patient_agent, evaluator_agent   # AI patient + evaluator
 
 # -------------------------
 # Load environment variables
@@ -44,6 +46,13 @@ ss.setdefault("student_answers", {})
 ss.setdefault("latest_feedback", None)
 ss.setdefault("scores", [])
 ss.setdefault("chat_log", [])
+ss.setdefault("attempt_history", [])   # ✅ NEW: store case history
+
+# -------------------------
+# Navigation Helper
+# -------------------------
+def set_page(name: str):
+    ss.page = name
 
 # -------------------------
 # Helper Functions
@@ -54,9 +63,19 @@ def reset_case_state():
     ss.chat_log = []
     ss.latest_feedback = None
 
-def reveal_test(test_name):
-    if test_name not in ss.revealed_tests:
-        ss.revealed_tests.append(test_name)
+def score_to_badge(avg: float) -> str:
+    if avg >= 8:
+        return "🏆 Pro"
+    elif avg >= 5:
+        return "⭐ Intermediate"
+    elif avg > 0:
+        return "🌱 Beginner"
+    else:
+        return "—"
+
+def snippet(text: str, n: int = 90) -> str:
+    return (text[:n] + "…") if len(text) > n else text
+
 
 # -------------------------
 # Sidebar
@@ -64,125 +83,174 @@ def reveal_test(test_name):
 st.sidebar.title("DocQuest 🩺")
 st.sidebar.markdown("**Disclaimer:** Educational simulation only — not medical advice.")
 
-# Show progress
+st.sidebar.markdown(f"#### 👤 Profile: Guest")
+
+# 📊 Progress + Case History (Merged)
+st.sidebar.markdown("### 📈 Progress & History")
+
 if ss.scores:
-    st.sidebar.metric("Cases Completed", len(ss.scores))
-    avg_score = sum(f["diagnosis_score"]+f["tests_score"]+f["plan_score"] for f in ss.scores) / len(ss.scores)
-    st.sidebar.metric("Average Score", f"{avg_score:.1f}/10")
+    total = len(ss.scores)
+    avg_score = sum(
+        f["diagnosis_score"] + f["tests_score"] + f["plan_score"] for f in ss.scores
+    ) / total
+    st.sidebar.write(f"Cases Completed: **{total}**")
+    st.sidebar.progress(min(int((avg_score/10)*100), 100))
+    st.sidebar.write(f"Average Score: **{avg_score:.1f}/10**")
+    st.sidebar.write(f"Badge: **{score_to_badge(avg_score)}**")
 else:
     st.sidebar.info("No cases attempted yet.")
+    st.sidebar.progress(0)
+    st.sidebar.write("Average Score: —")
+    st.sidebar.write("Badge: —")
+
+# 📜 Case History
+for i, att in enumerate(reversed(ss.attempt_history[-5:]), 1):
+    case_id = att['case_id']
+    score = att['score']
+    date = att['date']
+
+    st.sidebar.markdown(
+        f"""
+        <div title="Attempted on {date}" 
+             style="display:flex; justify-content:space-between; 
+                    align-items:center; margin:5px 0; 
+                    padding:5px 10px; border-radius:8px; 
+                    background:#f7f7f7; font-size:14px;">
+            <span><b>Case {case_id}</b> | {score}/10</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    if st.sidebar.button("🔄", key=f"reattempt_{i}"):
+        case = next((c for c in cases if c["id"] == att["case_id"]), None)
+        if case:
+            ss.current_case = case
+            set_page("CASE_DETAIL")
+
+        else:
+            st.sidebar.info("No history yet.")
 
 # -------------------------
 # ROUTES
 # -------------------------
 def page_home():
-    st.title("🏥 DocQuest")
-    st.markdown("Welcome to **DocQuest**, your medical case simulation platform. 🚑\n\n"
-                "Your journey through real medical cases — learn, practice, and grow like a doctor.")
-    if st.button("▶️ Start Simulation"):
-        ss.page = "CATEGORY_SELECT"
-        st.rerun()
+    st.markdown("<h1 style='margin-bottom:0'>🩺 DocQuest</h1>", unsafe_allow_html=True)
+    st.markdown(
+        "### Practice real medical cases. Build your diagnostic skills.\n"
+        "DocQuest is your safe space to simulate patient encounters and sharpen clinical reasoning."
+    )
+
+    # ✅ Start Simulation button
+    st.button("▶️ Start Simulation", use_container_width=True,
+              on_click=lambda: set_page("CATEGORY_SELECT"))
+
+    # 🌟 Today’s Challenge (Card style)
+    try:
+        rc = random.choice(cases)
+        st.markdown("""
+            <div style="
+                border-radius: 15px;
+                padding: 10px;
+                background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                margin-top:20px;
+                margin-bottom:20px;">
+                <h3 style="color:#ff5733; margin-bottom:10px;">🔥 Today’s Challenge</h3>
+                <p><b>Case:</b> {}</p>
+                <p style="color:#444; font-size:14px;">{}</p>
+            </div>
+        """.format(rc['id'], snippet(rc.get('description',''), 100)), unsafe_allow_html=True)
+
+        if st.button("🚀 Take Challenge", use_container_width=True):
+            ss.current_case = rc
+            set_page("CASE_DETAIL")
+
+    except Exception:
+        st.info("A featured case will appear here when cases.json is loaded.")
+
 
 def page_category_select():
     st.title("📂 Select Case Category")
+    categories = sorted(set(c.get("category", "General") for c in cases))
+    selected_category = st.selectbox("Choose a category", categories)
+    ss.current_category = selected_category
 
-    categories = sorted(set(c["category"] for c in cases))
-    selected_category = st.selectbox("Choose a category", ["-- Select --"] + categories)
+    st.markdown(f"### Cases in **{selected_category}**")
+    category_cases = [c for c in cases if c.get("category") == selected_category]
+    if not category_cases:
+        st.warning("No cases in this category yet.")
+        return
 
-    if selected_category != "-- Select --":
-        ss.current_category = selected_category
-        st.markdown(f"### Cases in {selected_category}")
-
-        category_cases = [c for c in cases if c["category"] == selected_category]
-        for case in category_cases:
-            col1, col2 = st.columns([4, 1])
+    for case in category_cases:
+        with st.container():
+            col1, col2 = st.columns([6, 2])
             with col1:
-                st.write(f"**Case {case['id']}**")  # sirf Case number show hoga
+                st.markdown(f"**Case {case['id']}**")
+                st.caption(snippet(case.get("description", ""), 110))
             with col2:
-                if st.button("Open", key=f"open_{case['id']}"):
-                    ss.current_case = case
-                    ss.page = "CASE_DETAIL"
-                    st.rerun()
+                st.button("Open", key=f"open_{case['id']}", use_container_width=True,
+                          on_click=_open_case, args=(case,))
+
+def _open_case(case):
+    ss.current_case = case
+    set_page("CASE_DETAIL")
 
 def page_case_detail():
     case = ss.current_case
+    if not case:
+        st.warning("No case selected.")
+        return
 
-    # Back button
-    if st.button("⬅️ Back to Categories"):
-        reset_case_state()
-        ss.page = "CATEGORY_SELECT"
-        st.rerun()
-
-    # Case Info
+    st.button("⬅️ Back to Categories", on_click=lambda: (_back_to_cat()))
     st.markdown(f"### 🩺 Case {case['id']}")
-    st.markdown(f"**Title:** {(case['title'])}")
-    st.markdown(f"**Description:** {(case['description'])}")
-    st.markdown(f"**Symptoms:** {', '.join(case['symptoms'])}")
 
-    # Tabs
+    with st.container():
+        st.markdown("#### 🧾 Description")
+        st.write(case.get("description", "—"))
+
+    with st.expander("🩺 Symptoms / History", expanded=True):
+        st.write(", ".join(case.get("symptoms", [])) or "—")
+
     tab1, tab2 = st.tabs(["💬 Interview Patient",  "📝 Solve Case"])
 
-    # -------------------------
-    # Interview Patient (GPT-5)
-    # -------------------------
+    # Interview Patient
     with tab1:
         st.subheader("Interview the Patient")
+        if ss.chat_log:
+            for who, msg in ss.chat_log[-20:]:
+                role = "user" if who == "You" else "assistant"
+                with st.chat_message(role):
+                    st.write(msg)
+        else:
+            st.info("Ask follow-up questions like: *When did it start? Any weight loss? Travel history?*")
 
-        if "interview_q" not in ss:
-            ss.interview_q = ""  # Initialize session state
+        user_q = st.chat_input("Type your question to the patient…")
+        if user_q:
+            ss.chat_log.append(("You", user_q))
+            messages = patient_agent(case, user_q)
+            response = client.chat.completions.create(
+                model="openai/gpt-5-chat-latest",
+                messages=messages,
+                temperature=0.7,
+            )
+            reply = response.choices[0].message.content
+            ss.chat_log.append(("Patient", reply))
 
-        question = st.text_input("Ask your question:", value=ss.interview_q, key="interview_q_input")
-
-        if st.button("Send Question", key="interview_btn"):
-            if question.strip():
-                ss.chat_log.append(("You", question))
-
-                # Call GPT-5 for patient reply
-                messages = patient_agent(case, question)
-                response = client.chat.completions.create(
-                    model="openai/gpt-5-chat-latest",
-                    messages=messages,
-                    temperature=0.7,
-                    top_p=0.7,
-                    frequency_penalty=1,
-                )
-                reply = response.choices[0].message.content
-                ss.chat_log.append(("Patient", reply))
-
-                # Clear text input after sending
-                ss.interview_q = ""  
-                st.rerun()
-
-        for who, msg in ss.chat_log[-10:]:
-            st.write(f"**{who}:** {msg}")
-
-
-
-
-    # -------------------------
-    # Solve Case (Evaluator)
-    # -------------------------
+    # Solve Case
     with tab2:
         st.subheader("Solve the Case")
         with st.form("solve_form"):
             student_diag = st.text_input("Provisional Diagnosis")
-
-            # Ab student khud tests likhega (comma separated)
-            tests_input = st.text_area("Key Tests (separate multiple tests with commas)")
+            tests_input = st.text_area("Key Tests (comma separated)")
             student_tests = [t.strip() for t in tests_input.split(",") if t.strip()]
-
             student_plan = st.text_area("Initial Management Plan")
             submit = st.form_submit_button("Submit for Feedback")
-        
+
         if submit:
-            student_answer = {
-                "diagnosis": student_diag,
-                "tests": student_tests,
-                "plan": student_plan
-            }
+            student_answer = {"diagnosis": student_diag, "tests": student_tests, "plan": student_plan}
             ss.student_answers[case["id"]] = student_answer
 
-            # AI evaluator feedback
             messages = evaluator_agent(case, student_answer)
             response = client.chat.completions.create(
                 model="openai/gpt-5-chat-latest",
@@ -193,34 +261,66 @@ def page_case_detail():
             fb = json.loads(response.choices[0].message.content)
             ss.latest_feedback = fb
             ss.scores.append(fb)
-            ss.page = "FEEDBACK"
-            st.rerun()
+
+            # ✅ NEW: Save attempt history
+            ss.attempt_history.append({
+                "case_id": case["id"],
+                "score": fb["diagnosis_score"] + fb["tests_score"] + fb["plan_score"],
+                "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+            })
+
+            set_page("FEEDBACK")
+
+def _back_to_cat():
+    reset_case_state()
+    set_page("CATEGORY_SELECT")
 
 def page_feedback():
     fb = ss.latest_feedback
+    if not fb:
+        st.warning("No feedback yet.")
+        return
+
     st.subheader("📊 Feedback & Learning")
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Diagnosis", f"{fb['diagnosis_score']}/4")
-    col2.metric("Tests", f"{fb['tests_score']}/3")
-    col3.metric("Plan", f"{fb['plan_score']}/3")
-    col4.metric("Total", f"{fb['diagnosis_score']+fb['tests_score']+fb['plan_score']}/10")
+    col1.success(f"Diagnosis: {fb['diagnosis_score']}/4")
+    col2.warning(f"Tests: {fb['tests_score']}/3")
+    col3.info(f"Plan: {fb['plan_score']}/3")
+    col4.write(f"**Total:** {fb['diagnosis_score']+fb['tests_score']+fb['plan_score']}/10")
 
-    st.subheader("💡 Feedback Notes")
-    for line in fb["feedback"]:
+    st.markdown("### 💡 Feedback Notes")
+    for line in fb.get("feedback", []):
         st.write(f"- {line}")
 
     if fb.get("learning_points"):
-        st.subheader("📘 Learning Points")
-        for lp in fb["learning_points"]:
-            st.write(f"- {lp}")
+        with st.expander("📘 Learning Points", expanded=True):
+            for lp in fb["learning_points"]:
+                st.write(f"- {lp}")
 
     if fb.get("red_flags"):
         st.error("⚠️ Red flags detected! Review carefully.")
 
-    if st.button("➡️ Back to Categories"):
-        reset_case_state()
-        ss.page = "CATEGORY_SELECT"
-        st.rerun()
+    # ✅ Export feedback option
+    export_feedback(fb)
+
+    c1, c2 = st.columns(2)
+    c1.button("⬅️ Back to Categories", on_click=_back_to_cat, use_container_width=True)
+    c2.button("🎯 Try Another Case", on_click=_back_to_cat, use_container_width=True)
+
+# -------------------------
+# Export Feedback PDF
+# -------------------------
+def export_feedback(fb):
+    from reportlab.platypus import SimpleDocTemplate, Paragraph
+    from reportlab.lib.styles import getSampleStyleSheet
+    doc = SimpleDocTemplate("feedback.pdf")
+    styles = getSampleStyleSheet()
+    story = [Paragraph("Feedback Report", styles["Heading1"])]
+    for k, v in fb.items():
+        story.append(Paragraph(f"{k}: {v}", styles["Normal"]))
+    doc.build(story)
+    with open("feedback.pdf", "rb") as f:
+        st.download_button("📥 Download Feedback PDF", f, file_name="feedback.pdf")
 
 # -------------------------
 # Router
