@@ -140,22 +140,23 @@ else:
 st.sidebar.markdown("### 📜 Recent Case History")
 history_to_show = (ss.attempt_history or []) + global_history
 
-# remove duplicates
-seen, merged = set(), []
+# ✅ keep only highest score per case_id
+best_by_case = {}
 for item in history_to_show:
-    key = (item.get("case_id"), item.get("date"), item.get("score"))
-    if key in seen:
-        continue
-    seen.add(key)
-    merged.append(item)
+    cid = item.get("case_id")
+    score = item.get("score", 0)
+    if cid not in best_by_case or score > best_by_case[cid]["score"]:
+        best_by_case[cid] = item
+
+# sorted by date (latest first)
+merged = sorted(best_by_case.values(), key=lambda x: x.get("date", ""), reverse=True)
 
 if merged:
-    for i, att in enumerate(reversed(merged[-8:]), 1):
+    for i, att in enumerate(merged[:8], 1):  # show last 8 unique cases
         case_id = att.get('case_id', '—')
         score = att.get('score', '—')
         date = att.get('date', '—')
 
-        # Left info + Right button
         c1, c2 = st.sidebar.columns([4, 1])
         with c1:
             st.markdown(
