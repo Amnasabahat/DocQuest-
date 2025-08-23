@@ -46,7 +46,7 @@ ss.setdefault("student_answers", {})
 ss.setdefault("latest_feedback", None)
 ss.setdefault("scores", [])
 ss.setdefault("chat_log", [])
-ss.setdefault("attempt_history", [])   # ✅ NEW: store case history
+ss.setdefault("attempt_history", [])   # store case history
 
 # -------------------------
 # Navigation Helper
@@ -76,18 +76,15 @@ def score_to_badge(avg: float) -> str:
 def snippet(text: str, n: int = 90) -> str:
     return (text[:n] + "…") if len(text) > n else text
 
-
 # -------------------------
 # Sidebar
 # -------------------------
 st.sidebar.title("DocQuest 🩺")
 st.sidebar.markdown("**Disclaimer:** Educational simulation only — not medical advice.")
-
 st.sidebar.markdown("#### 👤 Profile: Guest")
 
 # 📊 Progress + Case History
 st.sidebar.markdown("### 📈 Progress & History")
-
 if ss.scores:
     total = len(ss.scores)
     avg_score = sum(
@@ -103,31 +100,23 @@ else:
     st.sidebar.write("Average Score: —")
     st.sidebar.write("Badge: —")
 
-# 📜 Case History
+# 📜 Case History (one-line: Case N + 🔄 button; hover shows date/score)
+st.sidebar.markdown("### 📜 Recent Case History")
 if ss.attempt_history:
     for i, att in enumerate(reversed(ss.attempt_history[-5:]), 1):
-        case_id = att['case_id']
-        score = att['score']
-        date = att['date']
-
-        st.sidebar.markdown(
-            f"""
-            <div title="Attempted on {date}" 
-                 style="display:flex; justify-content:space-between; 
-                        align-items:center; margin:5px 0; 
-                        padding:5px 10px; border-radius:8px; 
-                        background:#f7f7f7; font-size:14px;">
-                <span><b>Case {case_id}</b> | {score}/10</span>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        if st.sidebar.button("🔄 Reattempt", key=f"reattempt_{i}"):
-            case = next((c for c in cases if c["id"] == att["case_id"]), None)
-            if case:
-                ss.current_case = case
-                set_page("CASE_DETAIL")
+        case_id = att["case_id"]
+        score = att["score"]
+        date = att["date"]
+        col_text, col_btn = st.sidebar.columns([4, 1])
+        with col_text:
+            # only show "Case N" to keep line compact
+            st.markdown(f"**Case {case_id}**")
+        with col_btn:
+            if st.button("🔄", key=f"reattempt_{i}", help=f"Attempted on {date} | Score: {score}/10"):
+                case = next((c for c in cases if c["id"] == case_id), None)
+                if case:
+                    ss.current_case = case
+                    set_page("CASE_DETAIL")
 else:
     st.sidebar.info("No history yet.")
 
@@ -141,42 +130,39 @@ def page_home():
         "DocQuest is your safe space to simulate patient encounters and sharpen clinical reasoning."
     )
 
-    # ✅ Start Simulation button
+    # Start Simulation button
     st.button("▶️ Start Simulation", use_container_width=True,
               on_click=lambda: set_page("CATEGORY_SELECT"))
 
- # 🌟 Today’s Challenge (Card style)
-try:
-    rc = random.choice(cases)
-    st.markdown(f"""
-        <div style="
-            border-radius: 12px;
-            padding: 15px;
-            background: #1e1e1e;  /* Dark card to match Streamlit dark theme */
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            margin-top:15px;
-            margin-bottom:15px;
-            color: #f1f1f1;
-            font-family: 'Segoe UI', sans-serif;">
-            
-            <h3 style="color:#ff9800; margin-bottom:8px;">🔥 Today’s Challenge</h3>
-            <p style="margin:0;"><b>Case:</b> {rc['id']}</p>
-            <p style="color:#ccc; font-size:13px; margin-top:5px;">
-                {snippet(rc.get('description',''), 90)}
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
+    # 🌟 Today’s Challenge (Card style, compact, dark-theme friendly)
+    try:
+        rc = random.choice(cases)
+        st.markdown(f"""
+            <div style="
+                border-radius: 12px;
+                padding: 12px;
+                background: #1e1e1e;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                margin-top:12px;
+                margin-bottom:8px;
+                color: #f1f1f1;
+                font-family: 'Segoe UI', sans-serif;">
+                <h3 style="color:#ff9800; margin:0 0 6px 0; font-size:1.1rem;">🔥 Today’s Challenge</h3>
+                <p style="margin:0; font-size:0.95rem;"><b>Case:</b> {rc['id']}</p>
+                <p style="color:#cfcfcf; font-size:0.85rem; margin-top:4px;">
+                    {snippet(rc.get('description',''), 90)}
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
 
-    # Button ko card ke andar shift karna
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        if st.button("🚀 Take Challenge", use_container_width=True):
-            ss.current_case = rc
-            set_page("CASE_DETAIL")
-
-
-except Exception:
-    st.info("A featured case will appear here when cases.json is loaded.")
+        # Centered native Streamlit button (reliable click) just under the card
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2:
+            if st.button("🚀 Take Challenge", use_container_width=True):
+                ss.current_case = rc
+                set_page("CASE_DETAIL")
+    except Exception:
+        st.info("A featured case will appear here when cases.json is loaded.")
 
 def page_category_select():
     st.title("📂 Select Case Category")
@@ -270,7 +256,7 @@ def page_case_detail():
             ss.latest_feedback = fb
             ss.scores.append(fb)
 
-            # ✅ Save attempt history
+            # Save attempt history
             ss.attempt_history.append({
                 "case_id": case["id"],
                 "score": fb["diagnosis_score"] + fb["tests_score"] + fb["plan_score"],
@@ -308,7 +294,7 @@ def page_feedback():
     if fb.get("red_flags"):
         st.error("⚠️ Red flags detected! Review carefully.")
 
-    # Export option
+    # Export option (PDF if reportlab available; else TXT fallback)
     export_feedback(fb)
 
     c1, c2 = st.columns(2)
@@ -316,19 +302,33 @@ def page_feedback():
     c2.button("🎯 Try Another Case", on_click=_back_to_cat, use_container_width=True)
 
 # -------------------------
-# Export Feedback PDF
+# Export Feedback (PDF with fallback)
 # -------------------------
 def export_feedback(fb):
-    from reportlab.platypus import SimpleDocTemplate, Paragraph
-    from reportlab.lib.styles import getSampleStyleSheet
-    doc = SimpleDocTemplate("feedback.pdf")
-    styles = getSampleStyleSheet()
-    story = [Paragraph("Feedback Report", styles["Heading1"])]
-    for k, v in fb.items():
-        story.append(Paragraph(f"{k}: {v}", styles["Normal"]))
-    doc.build(story)
-    with open("feedback.pdf", "rb") as f:
-        st.download_button("📥 Download Feedback PDF", f, file_name="feedback.pdf")
+    try:
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.pagesizes import A4
+        doc = SimpleDocTemplate("feedback.pdf", pagesize=A4)
+        styles = getSampleStyleSheet()
+        story = [Paragraph("Feedback Report", styles["Heading1"]), Spacer(1, 12)]
+        for k, v in fb.items():
+            story.append(Paragraph(f"<b>{k}</b>: {v}", styles["Normal"]))
+            story.append(Spacer(1, 6))
+        doc.build(story)
+        with open("feedback.pdf", "rb") as f:
+            st.download_button("📥 Download Feedback PDF", f, file_name="feedback.pdf")
+    except Exception as e:
+        # Fallback to TXT to avoid import errors
+        content_lines = ["Feedback Report", "================", ""]
+        for k, v in fb.items():
+            content_lines.append(f"{k}: {v}")
+        txt = "\n".join(content_lines)
+        with open("feedback.txt", "w", encoding="utf-8") as f:
+            f.write(txt)
+        with open("feedback.txt", "rb") as f:
+            st.download_button("📥 Download Feedback (TXT)", f, file_name="feedback.txt")
+        st.caption("PDF export requires `reportlab`. Installed? `pip install reportlab`")
 
 # -------------------------
 # Router
