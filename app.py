@@ -145,7 +145,7 @@ def page_home():
     st.button("▶️ Start Simulation", use_container_width=True,
               on_click=lambda: set_page("CATEGORY_SELECT"))
 
- # 🌟 Today’s Challenge (Card style)
+    # 🌟 Today’s Challenge (Card style)
     try:
         rc = random.choice(cases)
         st.markdown(f"""
@@ -167,13 +167,11 @@ def page_home():
             </div>
         """, unsafe_allow_html=True)
 
-        
-        col1, col2, col3 = st.columns([1,2,1])
+        col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             if st.button("🚀 Take Challenge", use_container_width=True):
                 ss.current_case = rc
                 set_page("CASE_DETAIL")
-
 
     except Exception:
         st.info("A featured case will appear here when cases.json is loaded.")
