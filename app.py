@@ -170,7 +170,7 @@ if merged:
             unsafe_allow_html=True
         )
 
-        if st.sidebar.button("🔄", key=f"reattempt_{i}"):
+        if st.sidebar.button("🔄", key=f"{i}"):
             case = next((c for c in cases if c["id"] == case_id), None)
             if case:
                 ss.current_case = case
