@@ -1,9 +1,10 @@
 import streamlit as st
 import json
 import os
+import random  # === CHANGE 3: for Today's Challenge ===
 from dotenv import load_dotenv
 from openai import OpenAI
-from agents import patient_agent, evaluator_agent   # <-- AI patient + evaluator
+from agents import patient_agent, evaluator_agent   # AI patient + evaluator
 
 # -------------------------
 # Load environment variables
@@ -45,6 +46,11 @@ ss.setdefault("latest_feedback", None)
 ss.setdefault("scores", [])
 ss.setdefault("chat_log", [])
 
+# === CHANGE 1: helper for navigation ===
+def set_page(name: str):
+    ss.page = name
+    st.rerun()
+
 # -------------------------
 # Helper Functions
 # -------------------------
@@ -58,65 +64,141 @@ def reveal_test(test_name):
     if test_name not in ss.revealed_tests:
         ss.revealed_tests.append(test_name)
 
+def score_to_badge(avg: float) -> str:
+    # === CHANGE 2: simple gamified badge ===
+    if avg >= 8:
+        return "🏆 Pro"
+    elif avg >= 5:
+        return "⭐ Intermediate"
+    elif avg > 0:
+        return "🌱 Beginner"
+    else:
+        return "—"
+
+def snippet(text: str, n: int = 90) -> str:
+    return (text[:n] + "…") if len(text) > n else text
+
 # -------------------------
 # Sidebar
 # -------------------------
 st.sidebar.title("DocQuest 🩺")
 st.sidebar.markdown("**Disclaimer:** Educational simulation only — not medical advice.")
 
-# Show progress
+# === CHANGE 2: Profile + progressbar + badge ===
+st.sidebar.markdown("#### 👤 Profile")
+st.sidebar.caption("Guest user")
+
+st.sidebar.markdown("#### 📈 Progress")
 if ss.scores:
-    st.sidebar.metric("Cases Completed", len(ss.scores))
-    avg_score = sum(f["diagnosis_score"]+f["tests_score"]+f["plan_score"] for f in ss.scores) / len(ss.scores)
-    st.sidebar.metric("Average Score", f"{avg_score:.1f}/10")
+    total = len(ss.scores)
+    avg_score = sum(
+        f["diagnosis_score"] + f["tests_score"] + f["plan_score"] for f in ss.scores
+    ) / total
+    st.sidebar.write(f"Cases Completed: **{total}**")
+    st.sidebar.progress(min(int((avg_score/10)*100), 100))
+    st.sidebar.write(f"Average Score: **{avg_score:.1f}/10**")
+    st.sidebar.write(f"Badge: **{score_to_badge(avg_score)}**")
 else:
     st.sidebar.info("No cases attempted yet.")
+    st.sidebar.progress(0)
+    st.sidebar.write("Average Score: —")
+    st.sidebar.write("Badge: —")
 
 # -------------------------
 # ROUTES
 # -------------------------
 def page_home():
-    st.title("🏥 DocQuest")
-    st.markdown("Welcome to **DocQuest**, your medical case simulation platform. 🚑\n\n"
-                "Your journey through real medical cases — learn, practice, and grow like a doctor.")
-    if st.button("▶️ Start Simulation"):
-        ss.page = "CATEGORY_SELECT"
-        st.rerun()
+    # === CHANGE 3: Hero + dual CTA + Today's Challenge + Category tiles ===
+    st.markdown("<h1 style='margin-bottom:0'>🩺 DocQuest</h1>", unsafe_allow_html=True)
+    st.markdown(
+        "### Practice real medical cases. Build your diagnostic skills.\n"
+        "DocQuest is your safe space to simulate patient encounters and sharpen clinical reasoning."
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.button("▶️ Start Simulation", use_container_width=True,
+                  on_click=lambda: set_page("CATEGORY_SELECT"))
+    with c2:
+        st.button("📂 Browse Cases", use_container_width=True,
+                  on_click=lambda: set_page("CATEGORY_SELECT"))
+
+    # Today's Challenge
+    st.markdown("#### 🌟 Today’s Challenge")
+    try:
+        rc = random.choice(cases)
+        st.info(f"**Case {rc['id']}** — {snippet(rc.get('description',''), 100)}")
+    except Exception:
+        st.info("A featured case will appear here when cases.json is loaded.")
+
+    # Category tiles
+    st.markdown("#### 🗂️ Pick a Category")
+    categories = sorted(set(c.get("category", "General") for c in cases))
+    if categories:
+        cols = st.columns(min(4, len(categories)))
+        for idx, cat in enumerate(categories):
+            with cols[idx % len(cols)]:
+                st.button(f"🔹 {cat}", key=f"cat_{cat}", use_container_width=True,
+                          on_click=lambda c=cat: _select_category_and_go(c))
+    else:
+        st.caption("No categories found in cases.json")
+
+def _select_category_and_go(cat):
+    ss.current_category = cat
+    set_page("CATEGORY_SELECT")
 
 def page_category_select():
     st.title("📂 Select Case Category")
 
-    categories = sorted(set(c["category"] for c in cases))
-    selected_category = st.selectbox("Choose a category", ["-- Select --"] + categories)
+    # === CHANGE 4: default to the clicked tile, otherwise let user choose ===
+    categories = sorted(set(c.get("category", "General") for c in cases))
+    default_idx = 0
+    if ss.current_category in categories:
+        default_idx = categories.index(ss.current_category)
+    selected_category = st.selectbox("Choose a category", categories, index=default_idx)
 
-    if selected_category != "-- Select --":
-        ss.current_category = selected_category
-        st.markdown(f"### Cases in {selected_category}")
+    ss.current_category = selected_category
+    st.markdown(f"### Cases in **{selected_category}**")
 
-        category_cases = [c for c in cases if c["category"] == selected_category]
-        for case in category_cases:
-            col1, col2 = st.columns([4, 1])
+    category_cases = [c for c in cases if c.get("category") == selected_category]
+    if not category_cases:
+        st.warning("No cases in this category yet.")
+        return
+
+    # Cards list
+    for case in category_cases:
+        with st.container():
+            col1, col2 = st.columns([6, 2])
             with col1:
-                st.write(f"**Case {case['id']}**")  # sirf Case number show hoga
+                st.markdown(f"**Case {case['id']}**")
+                st.caption(snippet(case.get("description", ""), 110))
+                if case.get("symptoms"):
+                    st.caption("Symptoms: " + ", ".join(case["symptoms"][:4]))
             with col2:
-                if st.button("Open", key=f"open_{case['id']}"):
-                    ss.current_case = case
-                    ss.page = "CASE_DETAIL"
-                    st.rerun()
+                st.button("Open", key=f"open_{case['id']}", use_container_width=True,
+                          on_click=_open_case, args=(case,))
+
+def _open_case(case):
+    ss.current_case = case
+    set_page("CASE_DETAIL")
 
 def page_case_detail():
     case = ss.current_case
+    if not case:
+        st.warning("No case selected.")
+        return
 
     # Back button
-    if st.button("⬅️ Back to Categories"):
-        reset_case_state()
-        ss.page = "CATEGORY_SELECT"
-        st.rerun()
-
-    # Case Info
+    st.button("⬅️ Back to Categories", on_click=lambda: (_back_to_cat()))
     st.markdown(f"### 🩺 Case {case['id']}")
-    st.markdown(f"**Description:** {(case['description'])}")
-    st.markdown(f"**Symptoms:** {', '.join(case['symptoms'])}")
+
+    # === CHANGE 5: card-like sections
+    with st.container():
+        st.markdown("#### 🧾 Description")
+        st.write(case.get("description", "—"))
+
+    with st.expander("🩺 Symptoms / History", expanded=True):
+        st.write(", ".join(case.get("symptoms", [])) or "—")
 
     # Tabs
     tab1, tab2 = st.tabs(["💬 Interview Patient",  "📝 Solve Case"])
@@ -127,36 +209,31 @@ def page_case_detail():
     with tab1:
         st.subheader("Interview the Patient")
 
-        if "interview_q" not in ss:
-            ss.interview_q = ""  # Initialize session state
+        # Chat history
+        if ss.chat_log:
+            for who, msg in ss.chat_log[-20:]:
+                role = "user" if who == "You" else "assistant"
+                with st.chat_message(role):
+                    st.write(msg)
+        else:
+            st.info("Ask follow-up questions like: *When did it start? Any weight loss? Travel history?*")
 
-        question = st.text_input("Ask your question:", value=ss.interview_q, key="interview_q_input")
-
-        if st.button("Send Question", key="interview_btn"):
-            if question.strip():
-                ss.chat_log.append(("You", question))
-
-                # Call GPT-5 for patient reply
-                messages = patient_agent(case, question)
-                response = client.chat.completions.create(
-                    model="openai/gpt-5-chat-latest",
-                    messages=messages,
-                    temperature=0.7,
-                    top_p=0.7,
-                    frequency_penalty=1,
-                )
-                reply = response.choices[0].message.content
-                ss.chat_log.append(("Patient", reply))
-
-                # Clear text input after sending
-                ss.interview_q = ""  
-                st.rerun()
-
-        for who, msg in ss.chat_log[-10:]:
-            st.write(f"**{who}:** {msg}")
-
-
-
+        # Chat input (Streamlit >= 1.25)
+        user_q = st.chat_input("Type your question to the patient…")
+        if user_q:
+            ss.chat_log.append(("You", user_q))
+            # Call GPT-5 for patient reply
+            messages = patient_agent(case, user_q)
+            response = client.chat.completions.create(
+                model="openai/gpt-5-chat-latest",
+                messages=messages,
+                temperature=0.7,
+                top_p=0.7,
+                frequency_penalty=1,
+            )
+            reply = response.choices[0].message.content
+            ss.chat_log.append(("Patient", reply))
+            st.rerun()
 
     # -------------------------
     # Solve Case (Evaluator)
@@ -166,13 +243,12 @@ def page_case_detail():
         with st.form("solve_form"):
             student_diag = st.text_input("Provisional Diagnosis")
 
-            # Ab student khud tests likhega (comma separated)
             tests_input = st.text_area("Key Tests (separate multiple tests with commas)")
             student_tests = [t.strip() for t in tests_input.split(",") if t.strip()]
 
             student_plan = st.text_area("Initial Management Plan")
             submit = st.form_submit_button("Submit for Feedback")
-        
+
         if submit:
             student_answer = {
                 "diagnosis": student_diag,
@@ -192,34 +268,42 @@ def page_case_detail():
             fb = json.loads(response.choices[0].message.content)
             ss.latest_feedback = fb
             ss.scores.append(fb)
-            ss.page = "FEEDBACK"
-            st.rerun()
+            set_page("FEEDBACK")
+
+def _back_to_cat():
+    reset_case_state()
+    set_page("CATEGORY_SELECT")
 
 def page_feedback():
     fb = ss.latest_feedback
-    st.subheader("📊 Feedback & Learning")
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Diagnosis", f"{fb['diagnosis_score']}/4")
-    col2.metric("Tests", f"{fb['tests_score']}/3")
-    col3.metric("Plan", f"{fb['plan_score']}/3")
-    col4.metric("Total", f"{fb['diagnosis_score']+fb['tests_score']+fb['plan_score']}/10")
+    if not fb:
+        st.warning("No feedback yet.")
+        return
 
-    st.subheader("💡 Feedback Notes")
-    for line in fb["feedback"]:
+    st.subheader("📊 Feedback & Learning")
+
+    # === CHANGE 6: colored summary cards
+    col1, col2, col3, col4 = st.columns(4)
+    col1.success(f"Diagnosis: {fb['diagnosis_score']}/4")
+    col2.warning(f"Tests: {fb['tests_score']}/3")
+    col3.info(f"Plan: {fb['plan_score']}/3")
+    col4.write(f"**Total:** {fb['diagnosis_score']+fb['tests_score']+fb['plan_score']}/10")
+
+    st.markdown("### 💡 Feedback Notes")
+    for line in fb.get("feedback", []):
         st.write(f"- {line}")
 
     if fb.get("learning_points"):
-        st.subheader("📘 Learning Points")
-        for lp in fb["learning_points"]:
-            st.write(f"- {lp}")
+        with st.expander("📘 Learning Points", expanded=True):
+            for lp in fb["learning_points"]:
+                st.write(f"- {lp}")
 
     if fb.get("red_flags"):
         st.error("⚠️ Red flags detected! Review carefully.")
 
-    if st.button("➡️ Back to Categories"):
-        reset_case_state()
-        ss.page = "CATEGORY_SELECT"
-        st.rerun()
+    c1, c2 = st.columns(2)
+    c1.button("⬅️ Back to Categories", on_click=_back_to_cat, use_container_width=True)
+    c2.button("🎯 Try Another Case", on_click=_back_to_cat, use_container_width=True)
 
 # -------------------------
 # Router
