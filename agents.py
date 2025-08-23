@@ -17,16 +17,16 @@ def patient_agent(case_memory: dict, user_message: str, history: list = None) ->
     messages = [{"role": "system", "content": system_prompt},
                 {"role": "user", "content": json.dumps(case_memory)}]
 
-    # Agar purani history hai toh add karo
+    
     if history:
         messages.extend(history)
 
-    # Abhi ka user message add karo
+    
     messages.append({"role": "user", "content": user_message})
     return messages
 
 
-# Evaluator Agent (no change)
+# Evaluator Agent 
 def evaluator_agent(case_memory: dict, student_answer: dict) -> list:
     system_prompt = """You are a medical tutor for an educational simulation (not real medical advice). 
     Compare the student’s diagnosis, tests, and initial plan to the case’s gold answers. 
