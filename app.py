@@ -271,7 +271,7 @@ def page_case_detail():
             response = client.chat.completions.create(
                 model="openai/gpt-5-chat-latest",
                 messages=messages,
-                temperature=0.7,
+                temperature=0.5,
             )
             reply = response.choices[0].message.content
             ss.chat_log.append(("Patient", reply))
@@ -295,7 +295,7 @@ def page_case_detail():
                 model="openai/gpt-5-chat-latest",
                 messages=messages,
                 response_format={"type": "json_object"},
-                temperature=0.7
+                temperature=0.5
             )
             fb = json.loads(response.choices[0].message.content)
             ss.latest_feedback = fb
