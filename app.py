@@ -267,7 +267,13 @@ def page_case_detail():
         user_q = st.chat_input("Type your question to the patient…")
         if user_q:
             ss.chat_log.append(("You", user_q))
-            messages = patient_agent(case, user_q)
+            history_msgs = []
+            for who, msg in ss.chat_log:
+                if who == "You":
+                    history_msgs.append({"role": "user", "content": msg})
+                else:
+                    history_msgs.append({"role": "assistant", "content": msg})
+            messages = patient_agent(case, user_q, history=history_msgs)
             response = client.chat.completions.create(
                 model="openai/gpt-5-chat-latest",
                 messages=messages,
