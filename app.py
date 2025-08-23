@@ -139,7 +139,8 @@ def page_home():
         for idx, cat in enumerate(categories):
             with cols[idx % len(cols)]:
                 st.button(f"🔹 {cat}", key=f"cat_{cat}", use_container_width=True,
-                          on_click=lambda c=cat: _select_category_and_go(c))
+                    on_click=lambda c=cat: _select_category_and_go(c))
+
     else:
         st.caption("No categories found in cases.json")
 
