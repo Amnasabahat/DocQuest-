@@ -109,17 +109,20 @@ if ss.attempt_history:
         date = att['date']
 
         st.sidebar.markdown(
-            f"""
-            <div title="Attempted on {date}" 
-                 style="display:flex; justify-content:space-between; 
-                        align-items:center; margin:5px 0; 
-                        padding:5px 10px; border-radius:8px; 
-                        background:#f7f7f7; font-size:14px;">
-                <span><b>Case {case_id}</b> | {score}/10</span>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        f"""
+        <div title="Attempted on {date}" 
+            style="display:flex; justify-content:space-between; 
+                    align-items:center; margin:5px 0; 
+                    padding:6px 10px; border-radius:8px; 
+                    background-color: rgba(255,255,255,0.05);
+                    border: 1px solid rgba(255,255,255,0.1);
+                    font-size:14px; color:#eee;">
+            <span><b>Case {case_id}</b> | {score}/10</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 
         if st.sidebar.button("🔄 Reattempt", key=f"reattempt_{i}"):
             case = next((c for c in cases if c["id"] == att["case_id"]), None)
